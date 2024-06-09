@@ -17,8 +17,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 warnings.filterwarnings("ignore")
 
-warnings.filterwarnings("ignore")
-
 
 class AudioAnalysisApp(tk.Tk):
     def __init__(self):
