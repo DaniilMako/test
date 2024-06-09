@@ -22,6 +22,7 @@ warnings.filterwarnings("ignore")
 class AudioAnalysisApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.flag_error = False
         self.result_tabs = ttk.Notebook(self)
         self.spectrogram_tab = tk.Frame(self.result_tabs)
         self.graphs_tab = tk.Frame(self.result_tabs)
@@ -533,6 +534,7 @@ class AudioAnalysisApp(tk.Tk):
             widget.destroy()
 
         dir_path = "asserts\\metrics\\"
+        metric_image_path = f"{dir_path}metric_resnet_mel.png"
 
         if self.model.get() == "ResNet182":
             if self.mode.get() == "С тишиной":
@@ -635,5 +637,8 @@ class AudioAnalysisApp(tk.Tk):
 
 
 if __name__ == "__main__":
-    app = AudioAnalysisApp()
+    try:
+        app = AudioAnalysisApp()
+    except:
+        app.flag_error = True
     app.mainloop()
