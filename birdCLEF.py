@@ -1,7 +1,6 @@
-import tkinter as tk
 import warnings
-from tkinter import filedialog
-from tkinter import ttk
+import tkinter as tk
+from tkinter import filedialog, ttk
 
 import librosa
 import librosa.display
@@ -18,11 +17,13 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 warnings.filterwarnings("ignore")
 
+warnings.filterwarnings("ignore")
+
 
 class AudioAnalysisApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.flag_error = False
+        self.flag_error = True
         self.result_tabs = ttk.Notebook(self)
         self.spectrogram_tab = tk.Frame(self.result_tabs)
         self.graphs_tab = tk.Frame(self.result_tabs)
@@ -32,6 +33,7 @@ class AudioAnalysisApp(tk.Tk):
         self.geometry("1600x900")
 
         self.audio_file_path = None
+        # self.audio_file_path = 'asserts/audio/XC400498.ogg'
         self.mode = tk.StringVar(value="С тишиной")
         self.experiment = tk.StringVar(value="Mel")
         self.model = tk.StringVar(value="ResNet182")
@@ -68,6 +70,17 @@ class AudioAnalysisApp(tk.Tk):
         ])
 
         self.create_widgets()
+
+    def start_analysis(self):
+        if self.audio_file_path:
+            print("Выюранная модель:", self.model.get())
+            print("Выбранный режим:", self.mode.get())
+            print("Выбранный эксперимент:", self.experiment.get())
+            self.display_spectrogram()
+            self.display_graphs()
+            self.display_metrics()
+            self.display_predictions()
+            self.true_to_false()
 
     def load_model(self):
         if self.model.get() == "ResNet182":
@@ -318,16 +331,6 @@ class AudioAnalysisApp(tk.Tk):
         self.audio_file_path = filedialog.askopenfilename(filetypes=[("Audio Files", "*.ogg;*.mp3;*.wav")])
         if self.audio_file_path:
             print("Выбран аудиофайл:", self.audio_file_path)
-
-    def start_analysis(self):
-        if self.audio_file_path:
-            print("Выюранная модель:", self.model.get())
-            print("Выбранный режим:", self.mode.get())
-            print("Выбранный эксперимент:", self.experiment.get())
-            self.display_spectrogram()
-            self.display_graphs()
-            self.display_metrics()
-            self.display_predictions()
 
     def display_spectrogram(self):
         # Load audio file
@@ -635,10 +638,10 @@ class AudioAnalysisApp(tk.Tk):
                                f" Encoded bird: {self.birds[top_classes[i]]}")
             tk.Label(self.predictions_tab, text=prediction_text).pack()
 
+    def true_to_false(self):
+        self.flag_error = False
+
 
 if __name__ == "__main__":
-    try:
-        app = AudioAnalysisApp()
-    except:
-        app.flag_error = True
+    app = AudioAnalysisApp()
     app.mainloop()
