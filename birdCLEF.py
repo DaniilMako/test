@@ -71,7 +71,7 @@ class AudioAnalysisApp(tk.Tk):
 
     def start_analysis(self):
         if self.audio_file_path:
-            print("Выюранная модель:", self.model.get())
+            print("Выбранная модель:", self.model.get())
             print("Выбранный режим:", self.mode.get())
             print("Выбранный эксперимент:", self.experiment.get())
             self.display_spectrogram()
