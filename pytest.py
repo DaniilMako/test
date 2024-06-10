@@ -1,23 +1,26 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from birdCLEF import AudioAnalysisApp
 
 
 class TestAudioAnalysisApp(unittest.TestCase):
-
     @patch('birdCLEF.filedialog.askopenfilename', return_value='XC400498.ogg')
     @patch('tkinter.Tk.__init__', return_value=None)
-    def test_choose_audio_file(self, mock_tk, mock_askopenfilename):
+    @patch('tkinter.ttk.Notebook.__init__', return_value=None)
+    def test_choose_audio_file(self, mock_notebook, mock_tk, mock_askopenfilename):
         app = AudioAnalysisApp()
+        app.result_tabs = MagicMock()  # Mock the result_tabs since ttk.Notebook is patched
         app.choose_audio_file()
         self.assertEqual(app.audio_file_path, 'XC400498.ogg')
         self.assertTrue(mock_askopenfilename.called)
 
     @patch('tkinter.Tk.__init__', return_value=None)
-    def test_create_widgets(self, mock_tk):
+    @patch('tkinter.ttk.Notebook.__init__', return_value=None)
+    def test_create_widgets(self, mock_notebook, mock_tk):
         app = AudioAnalysisApp()
+        app.result_tabs = MagicMock()  # Mock the result_tabs since ttk.Notebook is patched
         app.create_widgets()
-        self.assertTrue(app.result_tabs.winfo_exists())
+        self.assertTrue(app.result_tabs.winfo_exists())  # Assert that result_tabs exists
 
 
 if __name__ == '__main__':
