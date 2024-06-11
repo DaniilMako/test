@@ -1,27 +1,29 @@
-import warnings
 import tkinter as tk
 from tkinter import filedialog, ttk
+from warnings import filterwarnings
 
 import librosa
 import librosa.display
 import librosa.feature
 import matplotlib.pyplot as plt
 import numpy as np
-import timm
-import torch
+# import torch
+from torch import device, cuda, no_grad, topk, load, flatten
 import torch.nn as nn
-import torchvision.models as models
-import torchvision.transforms as transforms
+from torchvision.models import resnet18
+from torchvision.transforms import Compose, Resize, ToTensor, Normalize
+from timm import create_model
 from PIL import Image, ImageTk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-warnings.filterwarnings("ignore")
+filterwarnings("ignore")
 
 
 class AudioAnalysisApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.flag_error = True
+
         self.result_tabs = ttk.Notebook(self)
         self.spectrogram_tab = tk.Frame(self.result_tabs)
         self.graphs_tab = tk.Frame(self.result_tabs)
@@ -37,7 +39,7 @@ class AudioAnalysisApp(tk.Tk):
         self.model = tk.StringVar(value="ResNet182")
         self.model_file = None
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device("cuda" if cuda.is_available() else "cpu")
         self.birds = ['asbfly', 'ashdro1', 'ashpri1', 'ashwoo2', 'asikoe2', 'asiope1', 'aspfly1', 'aspswi1',
                       'barfly1', 'barswa', 'bcnher', 'bkcbul1', 'bkrfla1', 'bkskit1', 'bkwsti', 'bladro1',
                       'blaeag1', 'blakit1', 'blhori1', 'blnmon1', 'blrwar1', 'bncwoo3', 'brakit1', 'brasta1',
@@ -61,222 +63,13 @@ class AudioAnalysisApp(tk.Tk):
                       'thbwar1', 'tibfly3', 'tilwar1', 'vefnut1', 'vehpar1', 'wbbfly1', 'wemhar1', 'whbbul2',
                       'whbsho3', 'whbtre1', 'whbwag1', 'whbwat1', 'whbwoo2', 'whcbar1', 'whiter2', 'whrmun',
                       'whtkin2', 'woosan', 'wynlau1', 'yebbab1', 'yebbul3', 'zitcis1']
-        self.transform = transforms.Compose([
-            transforms.Resize((200, 800)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.25])
+        self.transform = Compose([
+            Resize((200, 800)),
+            ToTensor(),
+            Normalize(mean=[0.5], std=[0.25])
         ])
 
         self.create_widgets()
-
-    def start_analysis(self):
-        if self.audio_file_path:
-            print("Выбранная модель:", self.model.get())
-            print("Выбранный режим:", self.mode.get())
-            print("Выбранный эксперимент:", self.experiment.get())
-            self.display_spectrogram()
-            self.display_graphs()
-            self.display_metrics()
-            self.display_predictions()
-            self.true_to_false()
-
-    def load_model(self):
-        if self.model.get() == "ResNet182":
-            class ResNetGray182(nn.Module):
-                def __init__(self, num_classes=182):
-                    super(ResNetGray182, self).__init__()
-                    resnet = models.resnet18(pretrained=False)
-                    self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-                    self.conv1.weight.data = resnet.conv1.weight.data.sum(dim=1, keepdim=True)
-                    self.bn1 = resnet.bn1
-                    self.relu = resnet.relu
-                    self.maxpool = resnet.maxpool
-                    self.layer1 = resnet.layer1
-                    self.layer2 = resnet.layer2
-                    self.layer3 = resnet.layer3
-                    self.layer4 = resnet.layer4
-                    self.avgpool = resnet.avgpool
-                    self.fc = nn.Linear(resnet.fc.in_features, num_classes)
-
-                def forward(self, x):
-                    x = self.conv1(x)
-                    x = self.bn1(x)
-                    x = self.relu(x)
-                    x = self.maxpool(x)
-                    x = self.layer1(x)
-                    x = self.layer2(x)
-                    x = self.layer3(x)
-                    x = self.layer4(x)
-                    x = self.avgpool(x)
-                    x = torch.flatten(x, 1)
-                    x = self.fc(x)
-                    return x
-
-            if self.mode.get() == "С тишиной":
-                dir_models = "asserts\\models\\resnet\\default\\"
-                if self.experiment.get() == "Mel":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Spectral Contrast":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_spectral.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Constant Q Transform":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_cqt.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Short Time Fourier Transform":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_stft.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Chroma Contrast":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_chroma.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Label Smoothing":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Augmentations":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-            else:
-                dir_models = "asserts\\models\\resnet\\rs\\"
-                if self.experiment.get() == "Mel":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Spectral Contrast":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_spectral.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Constant Q Transform":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_cqt.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Short Time Fourier Transform":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_stft.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Chroma Contrast":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_chroma.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Label Smoothing":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Augmentations":
-                    model = ResNetGray182(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-        else:
-            class EfficientNetGray(nn.Module):
-                def __init__(self, num_classes=182):
-                    super(EfficientNetGray, self).__init__()
-                    self.model = timm.create_model('tf_efficientnet_b0', pretrained=False, num_classes=num_classes)
-                    in_channels = 1
-                    weight = self.model.conv_stem.weight.mean(1, keepdim=True)
-                    self.model.conv_stem = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),
-                                                     bias=False)
-                    self.model.conv_stem.weight = nn.Parameter(weight)
-
-                def forward(self, x):
-                    return self.model(x)
-
-            if self.mode.get() == "С тишиной":
-                dir_models = "asserts\\models\\efficientnet\\default\\"
-                if self.experiment.get() == "Mel":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Spectral Contrast":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(
-                        torch.load(f"{dir_models}EfficientNet_spectral.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Constant Q Transform":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_cqt.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Short Time Fourier Transform":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_stft.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Chroma Contrast":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_chroma.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Label Smoothing":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Augmentations":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-            else:
-                dir_models = "asserts\\models\\efficientnet\\rs\\"
-                if self.experiment.get() == "Mel":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Spectral Contrast":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(
-                        torch.load(f"{dir_models}EfficientNet_rs_spectral.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Constant Q Transform":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_rs_cqt.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Short Time Fourier Transform":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_rs_stft.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Chroma Contrast":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(
-                        torch.load(f"{dir_models}EfficientNet_rs_chroma.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Label Smoothing":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
-                elif self.experiment.get() == "Augmentations":
-                    model = EfficientNetGray(num_classes=182).to(self.device)
-                    model.load_state_dict(torch.load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
-                    model.eval()
-                    return model
 
     def create_widgets(self):
         # Frame for file selection
@@ -324,6 +117,17 @@ class AudioAnalysisApp(tk.Tk):
         self.result_tabs.add(self.metrics_tab, text="Метрики")
 
         self.result_tabs.add(self.predictions_tab, text="Предсказания")
+
+    def start_analysis(self):
+        if self.audio_file_path:
+            print("Выбранная модель:", self.model.get())
+            print("Выбранный режим:", self.mode.get())
+            print("Выбранный эксперимент:", self.experiment.get())
+            self.display_spectrogram()
+            self.display_graphs()
+            self.display_metrics()
+            self.display_predictions()
+            self.true_to_false()
 
     def choose_audio_file(self):
         self.audio_file_path = filedialog.askopenfilename(filetypes=[("Audio Files", "*.ogg;*.mp3;*.wav")])
@@ -452,6 +256,8 @@ class AudioAnalysisApp(tk.Tk):
             canvas = FigureCanvasTkAgg(plt.gcf(), master=self.spectrogram_tab)
             canvas.draw()
             canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # return self.experiment.get()
+        return True
 
     def display_graphs(self):
         # Clear previous graphs if exists
@@ -618,11 +424,11 @@ class AudioAnalysisApp(tk.Tk):
         spectrogram_img = Image.fromarray(spectrogram_db).convert('L')
         spectrogram_tensor = self.transform(spectrogram_img).unsqueeze(0).to(self.device)
 
-        with torch.no_grad():
+        with no_grad():
             logits = self.model_file(spectrogram_tensor)
-            probabilities = torch.nn.functional.softmax(logits, dim=1)
+            probabilities = nn.functional.softmax(logits, dim=1)
 
-        top_probabilities, top_classes = torch.topk(probabilities, 5)
+        top_probabilities, top_classes = topk(probabilities, 5)
         top_probabilities = top_probabilities.cpu().numpy()[0]
         top_classes = top_classes.cpu().numpy()[0]
 
@@ -635,6 +441,204 @@ class AudioAnalysisApp(tk.Tk):
             prediction_text = (f"Class: {top_classes[i]}, Probability: {top_probabilities[i]:.4f},"
                                f" Encoded bird: {self.birds[top_classes[i]]}")
             tk.Label(self.predictions_tab, text=prediction_text).pack()
+
+    def load_model(self):
+        if self.model.get() == "ResNet182":
+            class ResNetGray182(nn.Module):
+                def __init__(self, num_classes=182):
+                    super(ResNetGray182, self).__init__()
+                    resnet = resnet18(pretrained=False)
+                    self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+                    self.conv1.weight.data = resnet.conv1.weight.data.sum(dim=1, keepdim=True)
+                    self.bn1 = resnet.bn1
+                    self.relu = resnet.relu
+                    self.maxpool = resnet.maxpool
+                    self.layer1 = resnet.layer1
+                    self.layer2 = resnet.layer2
+                    self.layer3 = resnet.layer3
+                    self.layer4 = resnet.layer4
+                    self.avgpool = resnet.avgpool
+                    self.fc = nn.Linear(resnet.fc.in_features, num_classes)
+
+                def forward(self, x):
+                    x = self.conv1(x)
+                    x = self.bn1(x)
+                    x = self.relu(x)
+                    x = self.maxpool(x)
+                    x = self.layer1(x)
+                    x = self.layer2(x)
+                    x = self.layer3(x)
+                    x = self.layer4(x)
+                    x = self.avgpool(x)
+                    x = flatten(x, 1)
+                    x = self.fc(x)
+                    return x
+
+            if self.mode.get() == "С тишиной":
+                dir_models = "asserts\\models\\resnet\\default\\"
+                if self.experiment.get() == "Mel":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Spectral Contrast":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_spectral.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Constant Q Transform":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_cqt.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Short Time Fourier Transform":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_stft.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Chroma Contrast":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_chroma.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Label Smoothing":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Augmentations":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+            else:
+                dir_models = "asserts\\models\\resnet\\rs\\"
+                if self.experiment.get() == "Mel":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Spectral Contrast":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_spectral.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Constant Q Transform":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_cqt.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Short Time Fourier Transform":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_stft.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Chroma Contrast":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_chroma.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Label Smoothing":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Augmentations":
+                    model = ResNetGray182(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}ResNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+        else:
+            class EfficientNetGray(nn.Module):
+                def __init__(self, num_classes=182):
+                    super(EfficientNetGray, self).__init__()
+                    self.model = create_model('tf_efficientnet_b0', pretrained=False, num_classes=num_classes)
+                    in_channels = 1
+                    weight = self.model.conv_stem.weight.mean(1, keepdim=True)
+                    self.model.conv_stem = nn.Conv2d(in_channels, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),
+                                                     bias=False)
+                    self.model.conv_stem.weight = nn.Parameter(weight)
+
+                def forward(self, x):
+                    return self.model(x)
+
+            if self.mode.get() == "С тишиной":
+                dir_models = "asserts\\models\\efficientnet\\default\\"
+                if self.experiment.get() == "Mel":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Spectral Contrast":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(
+                        load(f"{dir_models}EfficientNet_spectral.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Constant Q Transform":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_cqt.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Short Time Fourier Transform":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_stft.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Chroma Contrast":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_chroma.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Label Smoothing":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Augmentations":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+            else:
+                dir_models = "asserts\\models\\efficientnet\\rs\\"
+                if self.experiment.get() == "Mel":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Spectral Contrast":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(
+                        load(f"{dir_models}EfficientNet_rs_spectral.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Constant Q Transform":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_rs_cqt.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Short Time Fourier Transform":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_rs_stft.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Chroma Contrast":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(
+                        load(f"{dir_models}EfficientNet_rs_chroma.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Label Smoothing":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
+                elif self.experiment.get() == "Augmentations":
+                    model = EfficientNetGray(num_classes=182).to(self.device)
+                    model.load_state_dict(load(f"{dir_models}EfficientNet_rs_mel.pth", map_location=self.device))
+                    model.eval()
+                    return model
 
     def true_to_false(self):
         self.flag_error = False
