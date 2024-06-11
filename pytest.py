@@ -3,22 +3,16 @@ from unittest.mock import patch, MagicMock
 import tkinter as tk
 import matplotlib
 
-
 matplotlib.use('Agg')
 
 from birdCLEF import AudioAnalysisApp
 
-class TestAudioAnalysisApp(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Mock для tkinter.Tk
-        cls.root = MagicMock()
-        cls.tk_patcher = patch('tkinter.Tk', return_value=cls.root)
-        cls.tk_patcher.start()
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.tk_patcher.stop()
+class TestAudioAnalysisApp(unittest.TestCase):
+    def setUp(self):
+        # Mock для tkinter
+        self.root = MagicMock()
+        tk.Tk = MagicMock(return_value=self.root)
 
     def test_create_widgets(self):
         app = AudioAnalysisApp()
@@ -31,6 +25,7 @@ class TestAudioAnalysisApp(unittest.TestCase):
         app.choose_audio_file()
         self.assertEqual(app.audio_file_path, 'XC400498.ogg')
         self.assertTrue(mock_askopenfilename.called)
+
 
 if __name__ == '__main__':
     unittest.main()
